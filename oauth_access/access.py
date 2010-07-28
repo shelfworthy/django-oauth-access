@@ -10,14 +10,12 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.urlresolvers import reverse
 from django.utils import simplejson as json
 
-from django.contrib.sites.models import Site
-
 import oauth2 as oauth
 
-from oauth_access.exceptions import NotAuthorized, MissingToken
-from oauth_access.models import UserAssociation
-from oauth_access.utils.anyetree import etree
-from oauth_access.utils.loader import load_path_attr
+from shelfworthy.apps.oauth_access.exceptions import NotAuthorized, MissingToken
+from shelfworthy.apps.oauth_access.models import UserAssociation
+from shelfworthy.apps.oauth_access.utils.anyetree import etree
+from shelfworthy.apps.oauth_access.utils.loader import load_path_attr
 
 
 logger = logging.getLogger("oauth_access.access")
@@ -97,9 +95,7 @@ class OAuthAccess(object):
     
     @property
     def callback_url(self):
-        current_site = Site.objects.get(pk=settings.SITE_ID)
-        # @@@ http fix
-        base_url = "http://%s" % current_site.domain
+        base_url = settings.SITE_URL
         callback_url = reverse("oauth_access_callback", kwargs={
             "service": self.service,
         })
@@ -145,9 +141,14 @@ class OAuthAccess(object):
                     )
                 ).read()
                 response = cgi.parse_qs(raw_data)
+                try:
+                    expires = int(response["expires"][-1])
+                except:
+                    expires = None
+
                 return OAuth20Token(
                     response["access_token"][-1],
-                    int(response["expires"][-1])
+                    expires
                 )
             else:
                 # @@@ this error case is not nice
@@ -203,18 +204,18 @@ class OAuthAccess(object):
         else:
             return assoc.user
     
-    def make_api_call(self, kind, url, token, method="GET", **kwargs):
+    def make_api_call(self, kind, url, token, method="GET", body=None, **kwargs):
         if isinstance(token, OAuth20Token):
             url += "?%s" % urllib.urlencode(dict(access_token=str(token)))
             http = httplib2.Http()
-            response, content = http.request(url, method=method)
+            response, content = http.request(url, method=method, body=body)
         else:
             if isinstance(token, basestring):
                 token = oauth.Token.from_string(token)
             client = Client(self.consumer, token=token)
             # @@@ LinkedIn requires Authorization header which is supported in
             # sub-classed version of Client (originally from oauth2)
-            response, content = client.request(url, method=method, force_auth_header=True)
+            response, content = client.request(url, method=method, body=body, force_auth_header=True)
         if response["status"] == "401":
             raise NotAuthorized()
         if not content:
@@ -234,6 +235,12 @@ class OAuthAccess(object):
             return etree.ElementTree(etree.fromstring(content))
         else:
             raise Exception("unsupported API kind")
+            
+            
+    def user_class(self, token):
+        klass = load_path_attr(self._obtain_setting("interface", "class"))
+
+        return klass(self, token)
 
 
 class Client(oauth.Client):
@@ -254,7 +261,7 @@ class Client(oauth.Client):
         is_multipart = method == "POST" and headers.get("Content-Type", DEFAULT_CONTENT_TYPE) != DEFAULT_CONTENT_TYPE
         
         if body and method == "POST" and not is_multipart:
-            parameters = dict(parse_qsl(body))
+            parameters = dict(body)
         else:
             parameters = None
         
@@ -291,9 +298,10 @@ class Client(oauth.Client):
 
 class OAuth20Token(object):
     
-    def __init__(self, token, expires):
+    def __init__(self, token, expires=None):
         self.token = token
-        self.expires = datetime.datetime.now() + datetime.timedelta(seconds=expires)
+        if expires:
+            self.expires = datetime.datetime.now() + datetime.timedelta(seconds=expires)
     
     def __str__(self):
         return str(self.token)
