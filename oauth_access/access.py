@@ -12,10 +12,10 @@ from django.utils import simplejson as json
 
 import oauth2 as oauth
 
-from shelfworthy.apps.oauth_access.exceptions import NotAuthorized, MissingToken
-from shelfworthy.apps.oauth_access.models import UserAssociation
-from shelfworthy.apps.oauth_access.utils.anyetree import etree
-from shelfworthy.apps.oauth_access.utils.loader import load_path_attr
+from oauth_access.exceptions import NotAuthorized, MissingToken
+from oauth_access.models import UserAssociation
+from oauth_access.utils.anyetree import etree
+from oauth_access.utils.loader import load_path_attr
 
 
 logger = logging.getLogger("oauth_access.access")
