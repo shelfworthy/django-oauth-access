@@ -27,48 +27,26 @@ class ServiceFail(Exception):
 
 class OAuthAccess(object):
     
-    def __init__(self, service):
+    def __init__(self, service, key, secret, endpoints, callback_func):
         self.service = service
         self.signature_method = oauth.SignatureMethod_HMAC_SHA1()
+        self.key = key
+        self.secret = secret
         self.consumer = oauth.Consumer(self.key, self.secret)
-    
-    @property
-    def key(self):
-        return self._obtain_setting("keys", "KEY")
-    
-    @property
-    def secret(self):
-        return self._obtain_setting("keys", "SECRET")
-    
+        self.endpoints = endpoints
+        self.callback_func = callback_func
+        
     @property
     def request_token_url(self):
-        return self._obtain_setting("endpoints", "request_token")
+        return self.endpoints.get("request_token")
     
     @property
     def access_token_url(self):
-        return self._obtain_setting("endpoints", "access_token")
+        return self.endpoints.get("access_token")
     
     @property
     def authorize_url(self):
-        return self._obtain_setting("endpoints", "authorize")
-    
-    def _obtain_setting(self, k1, k2):
-        name = "OAUTH_ACCESS_SETTINGS"
-        service = self.service
-        try:
-            return getattr(settings, name)[service][k1][k2]
-        except AttributeError:
-            raise ImproperlyConfigured("%s must be defined in settings" % (name,))
-        except KeyError, e:
-            key = e.args[0]
-            if key == service:
-                raise ImproperlyConfigured("%s must contain '%s'" % (name, service))
-            elif key == k1:
-                raise ImproperlyConfigured("%s must contain '%s' for '%s'" % (name, k1, service))
-            elif key == k2:
-                raise ImproperlyConfigured("%s must contain '%s' for '%s' in '%s'" % (name, k2, k1, service))
-            else:
-                raise
+        return self.endpoints.get("authorize")
     
     def unauthorized_token(self):
         if not hasattr(self, "_unauthorized_token"):
@@ -155,8 +133,7 @@ class OAuthAccess(object):
                 return None
     
     def callback(self, *args, **kwargs):
-        cb = load_path_attr(self._obtain_setting("endpoints", "callback"))
-        return cb(*args, **kwargs)
+        return self.callback_func(*args, **kwargs)
     
     def authorization_url(self, token=None):
         if token is None:
