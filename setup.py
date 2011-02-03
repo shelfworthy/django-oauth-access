@@ -15,6 +15,10 @@ setup(
         "oauth_access",
         "oauth_access.utils",
     ],
+    install_requires = [
+        'httplib2',
+        'oauth2'
+    ],
     classifiers = [
         "Development Status :: 3 - Alpha",
         "Environment :: Web Environment",
